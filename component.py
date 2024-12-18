@@ -424,9 +424,13 @@ class Component:
             Short term variability value
         """
         # Placeholder for more sophisticated variability calculation
-        return np.std(self.fetal_heart_rate)
+        rr_intervals = [60000 / bpm for bpm in self.fetal_heart_rate]  # 60000 ms in a minute
+        differences = np.abs(np.diff(rr_intervals))  # sbsolute differences
+        stv = np.mean(differences)  # mean of the differences
+        return stv
+        # return np.std(self.fetal_heart_rate)
 
-    def calculate_long_term_variability(self):
+    def calculate_long_term_variability(self , window_size = 5):
         """
         Calculate long term variability of FHR
 
@@ -436,4 +440,10 @@ class Component:
             Long term variability value
         """
         # Placeholder for more sophisticated variability calculation
-        return np.std(self.fetal_heart_rate)
+        ltv_values = []
+        for i in range(0, len(self.fetal_heart_rate), window_size):
+            window = self.fetal_heart_rate[i:i + window_size] # window_size: number of samples per window
+            if len(window) > 1:
+                ltv_values.append(np.std(window))  # standard deviation of each window
+        return np.mean(ltv_values) if ltv_values else 0
+        # return np.std(self.fetal_heart_rate)

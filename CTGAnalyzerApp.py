@@ -235,14 +235,3 @@ class CTGAnalyzerApp(QMainWindow):
         self.ui.analysis_table.insertRow(results_row)
         self.ui.analysis_table.setItem(results_row, 0, QTableWidgetItem('Results'))
         self.ui.analysis_table.setItem(results_row, 2, QTableWidgetItem(results['Overall']))
-
-
-def main():
-    app = QApplication(sys.argv)
-    ctg_app = CTGAnalyzerApp()
-    ctg_app.show()
-    sys.exit(app.exec())
-
-
-if __name__ == "__main__":
-    main()

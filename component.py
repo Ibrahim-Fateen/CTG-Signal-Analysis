@@ -175,12 +175,16 @@ class Component:
             Variability assessment
         """
         # Criteria for variability can vary, these are simplified
-        if short_term_var > 5 and long_term_var < 10:
-            return "Good Variability"
-        elif short_term_var < 3:
-            return "Reduced Variability"
+        if short_term_var < 5:
+            return "Low / Possible fetal distress"
+        elif short_term_var > 20:
+            return "High / Severe stress"
+        elif long_term_var < 10:
+            return "Low / Possible fetal distress"
+        elif long_term_var > 25:
+            return "High / Possible acute stress"
         else:
-            return "Moderate Variability"
+            return "Good Variability"
 
     def _assess_accelerations(self, has_accelerations):
         """
@@ -493,12 +497,12 @@ class Component:
         """
         # Placeholder for more sophisticated variability calculation
         rr_intervals = [60000 / bpm for bpm in self.fetal_heart_rate]  # 60000 ms in a minute
-        differences = np.abs(np.diff(rr_intervals))  # sbsolute differences
+        differences = np.abs(np.diff(rr_intervals))  # absolute differences
         stv = np.mean(differences)  # mean of the differences
         return stv
         # return np.std(self.fetal_heart_rate)
 
-    def calculate_long_term_variability(self , window_size = 5):
+    def calculate_long_term_variability(self , window_size = 120):
         """
         Calculate long term variability of FHR
 

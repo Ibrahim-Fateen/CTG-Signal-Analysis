@@ -18,6 +18,58 @@ class Component:
         self.time = time
         self.fetal_heart_rate = fetal_heart_rate
         self.uterine_contraction = uterine_contraction
+        self.contractions = self._get_contractions()
+
+    def _get_contractions(self):
+        """
+        For all contractions in self.uterine_contraction data, return a list of tuples
+        with the start, end, and peak times of each contraction.
+
+        Returns:
+        --------
+        list
+            List of tuples (start_time, peak_time, end_time) for each contraction
+        """
+        contractions = []
+        baseline = np.median(self.uterine_contraction)
+        in_contraction = False
+        start_time = None
+        peak_time = None
+        peak_value = float('-inf')
+
+        for i in range(len(self.uterine_contraction)):
+            current_value = self.uterine_contraction[i]
+            current_time = self.time[i]
+
+            # Start of potential contraction
+            if not in_contraction and current_value > baseline:
+                in_contraction = True
+                start_time = current_time
+                peak_value = current_value
+                peak_time = current_time
+
+            # During contraction, update peak
+            elif in_contraction and current_value > peak_value:
+                peak_value = current_value
+                peak_time = current_time
+
+            # End of contraction
+            elif in_contraction and current_value <= baseline:
+                # Only store valid contractions
+                if peak_time > start_time and current_time > peak_time:
+                    contractions.append((start_time, peak_time, current_time))
+
+                # Reset for next contraction
+                in_contraction = False
+                start_time = None
+                peak_time = None
+                peak_value = float('-inf')
+
+        # Handle case where contraction continues until end of signal
+        if in_contraction and peak_time > start_time:
+            contractions.append((start_time, peak_time, self.time[-1]))
+
+        return contractions
 
     def calculate_fhr_baseline(self):
         """
@@ -60,14 +112,13 @@ class Component:
 
         # Acceleration and deceleration assessment
         acceleration_status = self._assess_accelerations(
-            analysis_results['Accelerations'],
-            analysis_results['Late Accelerations']
+            analysis_results['Accelerations']
         )
 
         deceleration_status = self._assess_decelerations(
             analysis_results['Decelerations'],
             analysis_results['Early Decelerations'],
-            analysis_results['Variable Decelerations']
+            analysis_results['Late Decelerations']
         )
 
         # Combine assessments
@@ -131,7 +182,7 @@ class Component:
         else:
             return "Moderate Variability"
 
-    def _assess_accelerations(self, has_accelerations, has_late_accelerations):
+    def _assess_accelerations(self, has_accelerations):
         """
         Assess accelerations
 
@@ -147,14 +198,12 @@ class Component:
         str
             Acceleration assessment
         """
-        if has_accelerations and not has_late_accelerations:
+        if has_accelerations:
             return "Normal Accelerations"
-        elif has_late_accelerations:
-            return "Concerning Late Accelerations"
         else:
             return "Absent Accelerations"
 
-    def _assess_decelerations(self, has_decelerations, has_early_decelerations, has_variable_decelerations):
+    def _assess_decelerations(self, has_decelerations, has_early_decelerations, has_late_deceleration):
         """
         Assess decelerations
 
@@ -175,9 +224,9 @@ class Component:
         if not has_decelerations:
             return "No Decelerations"
         elif has_early_decelerations:
-            return "Early Decelerations (Usually Benign)"
-        elif has_variable_decelerations:
-            return "Variable Decelerations (Requires Attention)"
+            return "Early Decelerations - Head Compressions Detected"
+        elif has_late_deceleration:
+            return "Variable Decelerations - Fetal Hypoxia Detected"
         else:
             return "Concerning Decelerations"
 
@@ -240,11 +289,9 @@ class Component:
             'Short Term Variability': self.calculate_short_term_variability(),
             'Long Term Variability': self.calculate_long_term_variability(),
             'Accelerations': len(events['accelerations']) > 0,
-            'Late Accelerations': False,  # Placeholder
             'Decelerations': len(events['decelerations']) > 0,
             'Early Decelerations': len(events['early_decelerations']) > 0,
-            'Variable Decelerations': len(events['variable_decelerations']) > 0,
-            'Prolonged Decelerations': False  # Placeholder
+            'Late Decelerations': len(events['late_decelerations']) > 0,
         }
 
         # Add diagnosis column
@@ -261,12 +308,12 @@ class Component:
         dict
             Dictionary of event regions
         """
+        deceleration_regions = self._detect_decelerations()
         return {
             'accelerations': self._detect_accelerations(),
-            'decelerations': self._detect_decelerations(),
-            'early_decelerations': self._detect_early_decelerations(),
-            'late_decelerations': self._detect_late_decelerations(),
-            'variable_decelerations': self._detect_variable_decelerations()
+            'decelerations': deceleration_regions,
+            'early_decelerations': self._detect_early_decelerations(deceleration_regions),
+            'late_decelerations': self._detect_late_decelerations(deceleration_regions),
         }
 
     def _detect_accelerations(self, threshold_high=160, min_duration=15, max_duration=120, min_amplitude=15):
@@ -375,44 +422,65 @@ class Component:
 
         return decelerations
 
-    def _detect_early_decelerations(self):
+    def _detect_early_decelerations(self, deceleration_regions):
         """
-        Detect early deceleration regions
+        Detect early deceleration regions by comparing with contractions.
+        An early deceleration is defined as starting before the peak of a contraction.
+
+        Parameters:
+        -----------
+        deceleration_regions : list
+            List of (start_time, end_time) tuples for detected decelerations
 
         Returns:
         --------
         list
             List of (start_time, end_time) tuples for early decelerations
         """
-        # Placeholder for more sophisticated early deceleration detection
-        # Would typically involve correlation with uterine contractions
-        return []
+        early_decelerations = []
+        contractions = self.contractions  # Returns list of (start, peak, end)
 
-    def _detect_late_decelerations(self):
+        for decel_start, decel_end in deceleration_regions:
+            # For each deceleration, look for an overlapping contraction
+            for contr_start, contr_peak, contr_end in contractions:
+                # Check if deceleration overlaps with this contraction
+                if decel_start <= contr_end and decel_end >= contr_start:
+                    # If deceleration starts before contraction peak, it's early
+                    if decel_start <= contr_peak:
+                        early_decelerations.append((decel_start, decel_end))
+                        break  # Move to next deceleration once we find a match
+
+        return early_decelerations
+
+    def _detect_late_decelerations(self, deceleration_regions):
         """
-        Detect late deceleration regions
+        Detect late deceleration regions by comparing with contractions.
+        A late deceleration is defined as starting after the peak of a contraction.
+
+        Parameters:
+        -----------
+        deceleration_regions : list
+            List of (start_time, end_time) tuples for detected decelerations
 
         Returns:
         --------
         list
             List of (start_time, end_time) tuples for late decelerations
         """
-        # Placeholder for more sophisticated late deceleration detection
-        # Would typically involve specific pattern relative to contractions
-        return []
+        late_decelerations = []
+        contractions = self.contractions
 
-    def _detect_variable_decelerations(self):
-        """
-        Detect variable deceleration regions
+        for decel_start, decel_end in deceleration_regions:
+            # For each deceleration, look for an overlapping contraction
+            for contr_start, contr_peak, contr_end in contractions:
+                # Check if deceleration overlaps with this contraction
+                if decel_start <= contr_end and decel_end >= contr_start:
+                    # If deceleration starts after contraction peak, it's late
+                    if decel_start > contr_peak:
+                        late_decelerations.append((decel_start, decel_end))
+                        break  # Move to next deceleration once we find a match
 
-        Returns:
-        --------
-        list
-            List of (start_time, end_time) tuples for variable decelerations
-        """
-        # Placeholder for more sophisticated variable deceleration detection
-        # Would involve analyzing rapid changes in FHR
-        return []
+        return late_decelerations
 
     def calculate_short_term_variability(self):
         """

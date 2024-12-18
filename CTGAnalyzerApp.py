@@ -6,6 +6,7 @@ from PySide6.QtWidgets import (
     QTableWidgetItem, QVBoxLayout, QHeaderView
 )
 from PySide6.QtGui import QStandardItemModel, QStandardItem
+from sympy.stats.sampling.sample_numpy import numpy
 
 from signal1 import Signal
 
@@ -201,7 +202,7 @@ class CTGAnalyzerApp(QMainWindow):
                 continue  # Skip this in the main table rows
 
             # Round numerical values to 3 decimal places
-            if isinstance(value, (int, float)):
+            if type(value) == numpy.float64:
                 formatted_value = f"{value:.3f}"
             else:
                 formatted_value = str(value)

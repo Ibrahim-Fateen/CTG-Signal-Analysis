@@ -1,4 +1,3 @@
-import sys
 import pyqtgraph as pg
 from PySide6.QtCore import QFile
 from PySide6.QtUiTools import QUiLoader

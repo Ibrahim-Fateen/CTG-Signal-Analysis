@@ -269,9 +269,9 @@ class Component:
             'variable_decelerations': self._detect_variable_decelerations()
         }
 
-    def _detect_accelerations(self, threshold_high=160, min_duration=15, min_amplitude=15):
+    def _detect_accelerations(self, threshold_high=160, min_duration=15, max_duration=120, min_amplitude=15):
         """
-        Detect acceleration regions
+        Detect non-overlapping acceleration regions according to CTG definition
 
         Parameters:
         -----------
@@ -279,83 +279,99 @@ class Component:
             Upper threshold for acceleration (default: 160 bpm)
         min_duration : float, optional
             Minimum duration of acceleration (default: 15 seconds)
+        max_duration : float, optional
+            Maximum duration of acceleration (default: 120 seconds)
         min_amplitude : float, optional
             Minimum amplitude increase (default: 15 bpm)
 
         Returns:
         --------
         list
-            List of (start_time, end_time) tuples for accelerations
+            List of non-overlapping (start_time, end_time) tuples for accelerations
         """
         accelerations = []
-        in_acceleration = False
-        accel_start = None
         baseline = np.median(self.fetal_heart_rate)
+        last_end_time = float('-inf')  # Track the end time of the last acceleration
 
-        for i in range(1, len(self.fetal_heart_rate)):
-            # Check if current point exceeds threshold
+        for i in range(len(self.fetal_heart_rate) - 1):
+            # Skip if this potential acceleration starts before the last one ended
+            if self.time[i] < last_end_time:
+                continue
+
+            # Check if current point meets acceleration criteria
             if (self.fetal_heart_rate[i] > threshold_high and
-                    self.fetal_heart_rate[i] - baseline > min_amplitude):
+                    self.fetal_heart_rate[i] - baseline >= min_amplitude):
 
-                if not in_acceleration:
-                    # Start of acceleration
-                    in_acceleration = True
-                    accel_start = self.time[i]
+                # Find the end of the acceleration
+                j = i + 1
+                while (j < len(self.fetal_heart_rate) and
+                       self.fetal_heart_rate[j] > threshold_high and
+                       self.fetal_heart_rate[j] - baseline >= min_amplitude):
+                    j += 1
 
-                # Check duration at end of loop or signal
-                if i == len(self.fetal_heart_rate) - 1 or not in_acceleration:
-                    accel_end = self.time[i]
-                    if accel_end - accel_start >= min_duration:
-                        accelerations.append((accel_start, accel_end))
+                # Calculate duration
+                duration = self.time[j - 1] - self.time[i]
 
-                    in_acceleration = False
-                    accel_start = None
+                # Check if acceleration meets duration criteria
+                if min_duration <= duration < max_duration:
+                    accelerations.append((self.time[i], self.time[j - 1]))
+                    last_end_time = self.time[j - 1]
 
-            elif in_acceleration:
-                # End of acceleration
-                accel_end = self.time[i]
-                if accel_end - accel_start >= min_duration:
-                    accelerations.append((accel_start, accel_end))
-
-                in_acceleration = False
-                accel_start = None
+                # Move index to continue searching
+                i = j - 1
 
         return accelerations
 
-    def _detect_decelerations(self, threshold_low=110):
+    def _detect_decelerations(self, threshold_low=110, min_duration=15, max_duration=120, min_amplitude=15):
         """
-        Detect overall deceleration regions
+        Detect deceleration regions according to CTG definition
 
         Parameters:
         -----------
         threshold_low : float, optional
             Lower threshold for decelerations (default: 110 bpm)
+        min_duration : float, optional
+            Minimum duration of deceleration (default: 15 seconds)
+        max_duration : float, optional
+            Maximum duration of deceleration (default: 120 seconds)
+        min_amplitude : float, optional
+            Minimum amplitude decrease (default: 15 bpm)
 
         Returns:
         --------
         list
-            List of (start_time, end_time) tuples for decelerations
+            List of non-overlapping (start_time, end_time) tuples for decelerations
         """
         decelerations = []
-        in_deceleration = False
-        decel_start = None
+        baseline = np.median(self.fetal_heart_rate)
+        last_end_time = float('-inf')  # Track the end time of the last deceleration
 
-        for i in range(1, len(self.fetal_heart_rate)):
-            if self.fetal_heart_rate[i] < threshold_low:
-                if not in_deceleration:
-                    # Start of deceleration
-                    in_deceleration = True
-                    decel_start = self.time[i]
-            else:
-                if in_deceleration:
-                    # End of deceleration
-                    decelerations.append((decel_start, self.time[i]))
-                    in_deceleration = False
-                    decel_start = None
+        for i in range(len(self.fetal_heart_rate) - 1):
+            # Skip if this potential deceleration starts before the last one ended
+            if self.time[i] < last_end_time:
+                continue
 
-        # Handle case where deceleration continues to end of signal
-        if in_deceleration:
-            decelerations.append((decel_start, self.time[-1]))
+            # Check if current point meets deceleration criteria
+            if (self.fetal_heart_rate[i] < threshold_low and
+                    baseline - self.fetal_heart_rate[i] >= min_amplitude):
+
+                # Find the end of the deceleration
+                j = i + 1
+                while (j < len(self.fetal_heart_rate) and
+                       self.fetal_heart_rate[j] < threshold_low and
+                       baseline - self.fetal_heart_rate[j] >= min_amplitude):
+                    j += 1
+
+                # Calculate duration
+                duration = self.time[j - 1] - self.time[i]
+
+                # Check if deceleration meets duration criteria
+                if min_duration <= duration < max_duration:
+                    decelerations.append((self.time[i], self.time[j - 1]))
+                    last_end_time = self.time[j - 1]
+
+                # Move index to continue searching
+                i = j - 1
 
         return decelerations
 

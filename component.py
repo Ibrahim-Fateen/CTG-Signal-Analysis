@@ -322,42 +322,51 @@ class Component:
 
         return accelerations
 
-    def _detect_decelerations(self, threshold_low=110):
+    def _detect_decelerations(self, threshold_low=110, min_duration=15):
         """
-        Detect overall deceleration regions
+        Detect deceleration regions.
 
         Parameters:
         -----------
         threshold_low : float, optional
-            Lower threshold for decelerations (default: 110 bpm)
+            Lower threshold for decelerations (default: 110 bpm).
+        min_duration : float, optional
+            Minimum duration for a deceleration to be considered valid (default: 15 seconds).
 
         Returns:
         --------
         list
-            List of (start_time, end_time) tuples for decelerations
+            List of (start_time, end_time) tuples for decelerations.
         """
         decelerations = []
         in_deceleration = False
         decel_start = None
 
         for i in range(1, len(self.fetal_heart_rate)):
+            # Check if current point is below the threshold
             if self.fetal_heart_rate[i] < threshold_low:
                 if not in_deceleration:
                     # Start of deceleration
                     in_deceleration = True
                     decel_start = self.time[i]
-            else:
-                if in_deceleration:
-                    # End of deceleration
-                    decelerations.append((decel_start, self.time[i]))
-                    in_deceleration = False
-                    decel_start = None
 
-        # Handle case where deceleration continues to end of signal
-        if in_deceleration:
-            decelerations.append((decel_start, self.time[-1]))
+                # Handle the case of the end of the signal
+                if i == len(self.fetal_heart_rate) - 1:
+                    decel_end = self.time[i]
+                    if decel_end - decel_start >= min_duration:
+                        decelerations.append((decel_start, decel_end))
+
+            elif in_deceleration:
+                # End of deceleration
+                decel_end = self.time[i]
+                if decel_end - decel_start >= min_duration:
+                    decelerations.append((decel_start, decel_end))
+
+                in_deceleration = False
+                decel_start = None
 
         return decelerations
+
 
     def _detect_early_decelerations(self):
         """
@@ -408,9 +417,13 @@ class Component:
             Short term variability value
         """
         # Placeholder for more sophisticated variability calculation
-        return np.std(self.fetal_heart_rate)
+        rr_intervals = [60000 / bpm for bpm in self.fetal_heart_rate]  # 60000 ms in a minute
+        differences = np.abs(np.diff(rr_intervals))  # sbsolute differences
+        stv = np.mean(differences)  # mean of the differences
+        return stv
+        # return np.std(self.fetal_heart_rate)
 
-    def calculate_long_term_variability(self):
+    def calculate_long_term_variability(self , window_size = 5):
         """
         Calculate long term variability of FHR
 
@@ -420,4 +433,10 @@ class Component:
             Long term variability value
         """
         # Placeholder for more sophisticated variability calculation
-        return np.std(self.fetal_heart_rate)
+        ltv_values = []
+        for i in range(0, len(self.fetal_heart_rate), window_size):
+            window = self.fetal_heart_rate[i:i + window_size] # window_size: number of samples per window
+            if len(window) > 1:
+                ltv_values.append(np.std(window))  # standard deviation of each window
+        return np.mean(ltv_values) if ltv_values else 0
+        # return np.std(self.fetal_heart_rate)

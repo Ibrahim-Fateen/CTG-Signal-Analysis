@@ -8,7 +8,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtGui import QStandardItemModel, QStandardItem
 
-from signal import Signal
+from signal1 import Signal
 
 
 class CTGAnalyzerApp(QMainWindow):

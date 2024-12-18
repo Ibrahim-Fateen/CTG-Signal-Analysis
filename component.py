@@ -19,52 +19,238 @@ class Component:
         self.fetal_heart_rate = fetal_heart_rate
         self.uterine_contraction = uterine_contraction
 
-    def calculate_short_term_variability(self):
+    def calculate_fhr_baseline(self):
         """
-        Calculate short-term variability of fetal heart rate
+        Calculate the Fetal Heart Rate baseline for the component
 
         Returns:
         --------
         float
-            Short-term variability value
+            Average baseline FHR
         """
-        # Calculate the standard deviation of beat-to-beat variations
-        # This is a simplified implementation
-        beat_variations = np.diff(self.fetal_heart_rate)
-        return np.std(beat_variations)
+        # Typical baseline FHR is between 110-160 bpm
+        # Use median to reduce impact of extreme values
+        return np.median(self.fetal_heart_rate)
 
-    def calculate_long_term_variability(self):
+    def diagnose_condition(self, analysis_results):
         """
-        Calculate long-term variability of fetal heart rate
-
-        Returns:
-        --------
-        float
-            Long-term variability value
-        """
-        # Calculate the variance over a moving window
-        window_size = min(10, len(self.fetal_heart_rate) // 2)
-        return np.var(self._moving_window_values(window_size))
-
-    def _moving_window_values(self, window_size):
-        """
-        Calculate moving window values
+        Diagnose the infant's condition based on analysis results
 
         Parameters:
         -----------
-        window_size : int
-            Size of the moving window
+        analysis_results : dict
+            Dictionary of analysis results
 
         Returns:
         --------
-        numpy.ndarray
-            Values calculated over moving windows
+        str
+            Diagnostic interpretation
         """
-        return np.convolve(
-            self.fetal_heart_rate,
-            np.ones(window_size),
-            mode='valid'
-        ) / window_size
+        # Diagnostic criteria based on CTG parameters
+        # These are simplified and should be validated by medical professionals
+
+        # Check baseline
+        baseline = self.calculate_fhr_baseline()
+        baseline_status = self._assess_baseline(baseline)
+
+        # Variability assessment
+        short_term_var = analysis_results['Short Term Variability']
+        long_term_var = analysis_results['Long Term Variability']
+        variability_status = self._assess_variability(short_term_var, long_term_var)
+
+        # Acceleration and deceleration assessment
+        acceleration_status = self._assess_accelerations(
+            analysis_results['Accelerations'],
+            analysis_results['Late Accelerations']
+        )
+
+        deceleration_status = self._assess_decelerations(
+            analysis_results['Decelerations'],
+            analysis_results['Early Decelerations'],
+            analysis_results['Variable Decelerations']
+        )
+
+        # Combine assessments
+        overall_status = self._combine_assessments(
+            baseline_status,
+            variability_status,
+            acceleration_status,
+            deceleration_status
+        )
+
+        return {
+            'Baseline': baseline_status,
+            'Variability': variability_status,
+            'Accelerations': acceleration_status,
+            'Decelerations': deceleration_status,
+            'Overall': overall_status
+        }
+
+    def _assess_baseline(self, baseline):
+        """
+        Assess FHR baseline
+
+        Parameters:
+        -----------
+        baseline : float
+            Calculated baseline FHR
+
+        Returns:
+        --------
+        str
+            Baseline assessment
+        """
+        if 110 <= baseline <= 160:
+            return "Normal"
+        elif baseline < 110:
+            return "Bradycardia"
+        else:
+            return "Tachycardia"
+
+    def _assess_variability(self, short_term_var, long_term_var):
+        """
+        Assess FHR variability
+
+        Parameters:
+        -----------
+        short_term_var : float
+            Short-term variability value
+        long_term_var : float
+            Long-term variability value
+
+        Returns:
+        --------
+        str
+            Variability assessment
+        """
+        # Criteria for variability can vary, these are simplified
+        if short_term_var > 5 and long_term_var < 10:
+            return "Good Variability"
+        elif short_term_var < 3:
+            return "Reduced Variability"
+        else:
+            return "Moderate Variability"
+
+    def _assess_accelerations(self, has_accelerations, has_late_accelerations):
+        """
+        Assess accelerations
+
+        Parameters:
+        -----------
+        has_accelerations : bool
+            Presence of accelerations
+        has_late_accelerations : bool
+            Presence of late accelerations
+
+        Returns:
+        --------
+        str
+            Acceleration assessment
+        """
+        if has_accelerations and not has_late_accelerations:
+            return "Normal Accelerations"
+        elif has_late_accelerations:
+            return "Concerning Late Accelerations"
+        else:
+            return "Absent Accelerations"
+
+    def _assess_decelerations(self, has_decelerations, has_early_decelerations, has_variable_decelerations):
+        """
+        Assess decelerations
+
+        Parameters:
+        -----------
+        has_decelerations : bool
+            Presence of decelerations
+        has_early_decelerations : bool
+            Presence of early decelerations
+        has_variable_decelerations : bool
+            Presence of variable decelerations
+
+        Returns:
+        --------
+        str
+            Deceleration assessment
+        """
+        if not has_decelerations:
+            return "No Decelerations"
+        elif has_early_decelerations:
+            return "Early Decelerations (Usually Benign)"
+        elif has_variable_decelerations:
+            return "Variable Decelerations (Requires Attention)"
+        else:
+            return "Concerning Decelerations"
+
+    def _combine_assessments(self, baseline_status, variability_status, acceleration_status, deceleration_status):
+        """
+        Combine individual assessments into overall condition
+
+        Parameters:
+        -----------
+        baseline_status : str
+            Baseline assessment
+        variability_status : str
+            Variability assessment
+        acceleration_status : str
+            Acceleration assessment
+        deceleration_status : str
+            Deceleration assessment
+
+        Returns:
+        --------
+        str
+            Overall condition assessment
+        """
+        # This is a simplified assessment algorithm
+        concerning_factors = [
+            baseline_status != "Normal",
+            variability_status == "Reduced Variability",
+            acceleration_status == "Concerning Late Accelerations",
+            deceleration_status != "No Decelerations"
+        ]
+
+        # Count concerning factors
+        concern_count = sum(concerning_factors)
+
+        if concern_count == 0:
+            return "Normal Fetal Condition"
+        elif concern_count <= 1:
+            return "Mild Concerns"
+        elif concern_count <= 3:
+            return "Moderate Concerns"
+        else:
+            return "Significant Concerns"
+
+    def get_analysis_results(self):
+        """
+        Compile analysis results for the component
+
+        Returns:
+        --------
+        dict
+            Dictionary of analysis results
+        """
+        events = self.detect_events()
+
+        # Include baseline calculation
+        baseline = self.calculate_fhr_baseline()
+
+        analysis_results = {
+            'FHR Baseline': baseline,
+            'Short Term Variability': self.calculate_short_term_variability(),
+            'Long Term Variability': self.calculate_long_term_variability(),
+            'Accelerations': len(events['accelerations']) > 0,
+            'Late Accelerations': False,  # Placeholder
+            'Decelerations': len(events['decelerations']) > 0,
+            'Early Decelerations': len(events['early_decelerations']) > 0,
+            'Variable Decelerations': len(events['variable_decelerations']) > 0,
+            'Prolonged Decelerations': False  # Placeholder
+        }
+
+        # Add diagnosis column
+        analysis_results['Results'] = self.diagnose_condition(analysis_results)
+
+        return analysis_results
 
     def detect_events(self):
         """
@@ -212,24 +398,26 @@ class Component:
         # Would involve analyzing rapid changes in FHR
         return []
 
-    def get_analysis_results(self):
+    def calculate_short_term_variability(self):
         """
-        Compile analysis results for the component
+        Calculate short term variability of FHR
 
         Returns:
         --------
-        dict
-            Dictionary of analysis results
+        float
+            Short term variability value
         """
-        events = self.detect_events()
+        # Placeholder for more sophisticated variability calculation
+        return np.std(self.fetal_heart_rate)
 
-        return {
-            'Short Term Variability': self.calculate_short_term_variability(),
-            'Long Term Variability': self.calculate_long_term_variability(),
-            'Accelerations': len(events['accelerations']) > 0,
-            'Late Accelerations': False,  # Placeholder
-            'Decelerations': len(events['decelerations']) > 0,
-            'Early Decelerations': len(events['early_decelerations']) > 0,
-            'Variable Decelerations': len(events['variable_decelerations']) > 0,
-            'Prolonged Decelerations': False  # Placeholder
-        }
+    def calculate_long_term_variability(self):
+        """
+        Calculate long term variability of FHR
+
+        Returns:
+        --------
+        float
+            Long term variability value
+        """
+        # Placeholder for more sophisticated variability calculation
+        return np.std(self.fetal_heart_rate)

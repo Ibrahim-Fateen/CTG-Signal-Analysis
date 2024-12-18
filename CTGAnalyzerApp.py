@@ -25,7 +25,7 @@ class CTGAnalyzerApp(QMainWindow):
         self.setCentralWidget(self.ui)
         self.ui.show()
         self.ui.setWindowTitle("CTG Analyzer")
-        self.ui.setFixedSize(1200, 800)
+        self.ui.showMaximized()
 
         # Initialize data
         self.signal = None
@@ -180,31 +180,61 @@ class CTGAnalyzerApp(QMainWindow):
             self.populate_analysis_table()
 
     def populate_analysis_table(self):
-        """
-        Populate analysis table with current component's metrics
-        """
         if not self.signal:
             return
 
         # Get current component's analysis results
         current_component = self.signal.get_component(self.current_component_index)
         analyses = current_component.get_analysis_results()
+        results = current_component.diagnose_condition(analyses)
+
+        # Set table to 3 columns
+        self.ui.analysis_table.setColumnCount(3)
+
+        # Set column headers
+        self.ui.analysis_table.setHorizontalHeaderLabels(['Metric', 'Value', 'Results'])
 
         # Populate table
-        self.ui.analysis_table.setRowCount(len(analyses))
-        for row, (name, value) in enumerate(analyses.items()):
-            self.ui.analysis_table.setItem(row, 0, QTableWidgetItem(name))
+        self.ui.analysis_table.setRowCount(len(analyses) - 1)  # Subtract 1 to remove 'Results' from row count
+        row = 0
+        for name, value in analyses.items():
+            if name == 'Results':
+                continue  # Skip this in the main table rows
 
+            # Round numerical values to 3 decimal places
             if isinstance(value, (int, float)):
                 formatted_value = f"{value:.3f}"
             else:
                 formatted_value = str(value)
 
+            # Metric column
+            self.ui.analysis_table.setItem(row, 0, QTableWidgetItem(name))
+
+            # Value column
             self.ui.analysis_table.setItem(row, 1, QTableWidgetItem(formatted_value))
 
+            # Results column
+            if name == "FHR Baseline":
+                self.ui.analysis_table.setItem(row, 2, QTableWidgetItem(results['Baseline']))
+            elif name == "Short Term Variability" or name == "Long Term Variability":
+                self.ui.analysis_table.setItem(row, 2, QTableWidgetItem(results['Variability']))
+            elif name == "Accelerations":
+                self.ui.analysis_table.setItem(row, 2, QTableWidgetItem(results['Accelerations']))
+            elif name == "Decelerations":
+                self.ui.analysis_table.setItem(row, 2, QTableWidgetItem(results['Decelerations']))
+
+            row += 1
+
+        # Set column widths
         self.ui.analysis_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
         self.ui.analysis_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
-        self.ui.analysis_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        self.ui.analysis_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)
+
+        # Overall results row
+        results_row = self.ui.analysis_table.rowCount()
+        self.ui.analysis_table.insertRow(results_row)
+        self.ui.analysis_table.setItem(results_row, 0, QTableWidgetItem('Results'))
+        self.ui.analysis_table.setItem(results_row, 2, QTableWidgetItem(results['Overall']))
 
 
 def main():

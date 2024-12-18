@@ -204,6 +204,7 @@ class CTGAnalyzerApp(QMainWindow):
 
         self.ui.analysis_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
         self.ui.analysis_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        self.ui.analysis_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
 
 
 def main():

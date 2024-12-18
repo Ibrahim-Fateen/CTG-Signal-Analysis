@@ -2240,6 +2240,11 @@ PlotWidget {
           <string>Value</string>
          </property>
         </column>
+        <column>
+         <property name="text">
+          <string>Results</string>
+         </property>
+        </column>
        </widget>
       </item>
      </layout>
